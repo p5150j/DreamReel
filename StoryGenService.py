@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import anthropic
 import json
 import logging
@@ -33,14 +34,22 @@ else:
 # System prompt for Claude
 system_prompt = """IMPORTANT: Return ONLY the JSON structure below. Do not add any explanatory text, introductions, or additional formatting before or after the JSON. The response must start with { and end with }.
 
-Return this exact JSON structure with your story content. Do not add any other text or formatting:
-
+Return this exact JSON structure with your story content. Do not add any other text or formatting before or after the JSON. The response must start with { and end with }:
+example json (this is just an example, do not follow values exactly):
 {
+    "movie_info": {
+        "genre": "noir",
+        "title": "The Dark Side of the City",
+        "description": "A private investigator is hired to find a missing woman who may be involved in a dangerous criminal organization. As he delves deeper into the case, he discovers a web of secrets and lies that threaten to destroy everything he holds dear.",
+        "release_year": 2024,
+        "director": "John Doe",
+        "rating": 7.5
+    },
     "character": {
-        "base_traits": "(mid-30s asian woman:1.4)",
-        "facial_features": "(determined brown eyes:1.3)",
-        "distinctive_features": "(small scar on left cheek:1.4)",
-        "clothing": "(hiking gear:1.2)"
+        "base_traits": "young 18 year old female, slender frame, fair complexion",
+        "facial_features": "defined features, slightly parted lips, expressive eyes, high contrast facial structure",
+        "distinctive_features": "white hair, multiple facial piercings, contrasting against skin tone and chest tattoos",
+        "clothing": "minimal visible clothing, possibly dark casual wear"
     },
     "music_score": {
         "type": "ambient",
@@ -52,759 +61,698 @@ Return this exact JSON structure with your story content. Do not add any other t
         {
             "sequence_number": 1,
             "clip_duration": 3.0625,
-            "clip_action": "static camera, clouds drifting slowly",
+            "clip_action": "dust particles catching golden light as they drift upward, creating delicate patterns of illumination across rusted metal surfaces",
             "voice_narration": "...",
             "type": "b-roll",
-            "environment": "ESTABLISHING SHOT - EXT. COLORADO MOUNTAINS - DAY",
-            "atmosphere": "(8k uhd:1.4), (photorealistic:1.4), (cinematic lighting:1.3), (film grain:1.2), (cinematic color grading:1.3), (somber mood:1.4)",
-            "negative_prompt": "(worst quality:1.4), (low quality:1.4), (blurry:1.2), (deformed:1.4), (distorted:1.4), (bad anatomy:1.4), (bad proportions:1.4), (multiple people:1.8), (wrong face:1.8), (different person:1.8), (duplicate body parts:1.4), (missing limbs:1.4), (bad hands:1.4)"
+            "environment": "ESTABLISHING SHOT - EYE LEVEL - RULE OF THIRDS - EXT. ABANDONED WAREHOUSE WITH BROKEN WINDOWS AND RUSTED METAL DOORS - DAY - DUST PARTICLES FLOATING IN SUNBEAMS",
+            "atmosphere": "8k uhd, photorealistic, natural sunlight streaming through broken windows, dramatic shadows cast by debris, high contrast between light beams and dark corners, studio lighting quality, sharp details on textured surfaces, cinematic color grading with warm highlights and cool shadows"
         },
         {
             "sequence_number": 2,
             "clip_duration": 3.0625,
-            "clip_action": "pan right, leaves swaying gently",
+            "clip_action": "fabric rippling delicately as breath escapes, shadows shifting subtly across exposed brick wall, dust particles catching light around face",
             "voice_narration": "It has to be here somewhere...",
             "type": "character",
-            "pose": "[previous character traits], (sitting on rock:1.4), (leaning forward slightly:1.3)",
-            "environment": "MEDIUM SHOT - EXT. COLORADO MOUNTAINS - DAY",
-            "atmosphere": "(frustrated determination:1.4), (dramatic sunset light:1.4), (golden hour:1.3)",
-            "negative_prompt": "(worst quality:1.4), (low quality:1.4), (blurry:1.2), (deformed:1.4), (distorted:1.4), (bad anatomy:1.4), (bad proportions:1.4), (multiple people:1.8), (wrong face:1.8), (different person:1.8), (duplicate body parts:1.4), (missing limbs:1.4), (bad hands:1.4)"
+            "pose": "[previous character traits], face turned slightly toward light source, chin slightly lowered, lips parted subtly, eyes catching highlight from sunbeam",
+            "environment": "CLOSE UP - EYE LEVEL - PORTRAIT FRAMING - INT. WAREHOUSE CORNER WITH EXPOSED BRICK WALL AND SINGLE SUNBEAM - DAY - DUST PARTICLES CATCHING LIGHT",
+            "atmosphere": "8k uhd, photorealistic, natural sunlight beam creating dramatic rim lighting, high contrast ratio between illuminated face and dark background, warm highlights on skin catching dust particles, studio portrait quality with shallow depth of field, sharp details on facial features, cinematic color grading with golden hour tones"
         }
     ]
 }
+
+MOVIE_INFO REQUIREMENTS:
+1. genre: Must match the requested genre exactly (e.g., "noir", "sci-fi", "horror", etc.)
+2. title: Create a compelling, genre-appropriate title that reflects the story's theme
+3. description: Write a 2-3 sentence synopsis that captures the main plot and tone
+4. release_year: Set to current year (2025)
+5. director: Generate a realistic director name
+6. rating: Provide a realistic rating between 7.0 and 9.5
 
 Guidelines for Parameter Generation:
 
 Character Data:
 1. base_traits:
-   - Include age, ethnicity, gender, body type
-   - Format: "age, ethnicity, gender, body type"
-   - Example: "35, caucasian, female, athletic"
+   - Physical Attributes (Required):
+     * Age range or specific age
+     * Ethnicity/background
+     * Gender
+     * Body type and build
+     * Height and proportions
+   
+   - Format: "age, ethnicity, gender, body type, build"
+   - Examples:
+     * "young female, slender frame, fair complexion"
+     * "middle-aged male, athletic build, weathered features"
+     * "elderly woman, petite frame, graceful posture"
 
 2. facial_features:
-   - Focus on eyes, eyebrows, nose, lips
-   - Include skin quality and facial structure
-   - Use specific descriptors (e.g., "almond-shaped eyes", "high cheekbones")
-   - Format: "(feature description:1.3)"
-   - Combine multiple features with commas (e.g., "(freckled face:1.3), (determined eyes:1.3)")
+   - Eye Details (Required):
+     * Shape and color
+     * Expression quality
+     * Eye spacing and position
+   
+   - Facial Structure (Required):
+     * Bone structure
+     * Feature placement
+     * Overall symmetry
+   
+   - Skin Quality (Required):
+     * Texture and tone
+     * Notable features
+     * Age indicators
+   
+   Format: Combine elements with commas
+   Examples:
+   - "defined features, slightly parted lips, expressive eyes, high contrast facial structure"
+   - "strong jawline, deep-set eyes, weathered skin, prominent cheekbones"
+   - "delicate features, wide-set eyes, smooth complexion, gentle facial structure"
 
 3. clothing:
-   - Describe specific materials and styles
-   - Include accessories and details
-   - Specify fit and condition
-   - Format: "(material style accessories:1.2)"
-   - List multiple items separately (e.g., "(worn denim jacket:1.2), (striped shirt:1.2)")
+   - Primary Garments (Required):
+     * Material and texture
+     * Style and cut
+     * Color and pattern
+   
+   - Fit and Condition (Required):
+     * How clothing sits on body
+     * Wear and tear
+     * Movement quality
+   
+   - Accessories (Optional):
+     * Jewelry and adornments
+     * Practical items
+     * Character-defining pieces
+   
+   Format: "material style condition, accessories"
+   Examples:
+   - "minimal visible clothing, possibly dark casual wear"
+   - "worn leather jacket, fitted black jeans, scuffed boots"
+   - "flowing silk dress, delicate silver jewelry, practical belt"
 
 4. distinctive_features:
-   - Include unique elements (scars, tattoos, birthmarks)
-   - Specify hair style and color
-   - Add any notable physical characteristics
-   - Format: "(unique feature:1.4)"
-   - Focus on memorable details (e.g., "(80s style curly hair:1.4)")
+   - Unique Elements (Required):
+     * Unusual physical traits
+     * Notable markings
+     * Distinctive characteristics
+   
+   - Hair Details (Required):
+     * Style and cut
+     * Color and texture
+     * Movement quality
+   
+   - Special Features (Optional):
+     * Piercings, Tattoos or modifications
+     * Character-defining elements
+     * Memorable details
+   
+   Format: "unique elements, hair details, special features"
+   Examples:
+   - "white hair, multiple facial piercings, contrasting against skin tone"
+   - "vibrant red hair, geometric tattoos, silver ear cuffs"
+   - "silver-streaked hair, ancient scar, glowing eyes"
 
 Scene Data:
 1. pose:
-   - Detail body positioning and posture
-   - Specify hand positions and gestures
-   - Include facial expressions that reveal emotional state
-   - Format: "[previous traits], (specific pose:1.4)"
-   - Combine multiple elements (e.g., "(hands trembling:1.3), (eyes wide with fear:1.3)")
-   - Always reference previous character traits
-   - Show emotional progression through poses
+   - Base Posture (Required):
+     * Standing, sitting, kneeling, etc.
+     * Include direction (e.g., "turned slightly toward light")
+     * Specify stance (e.g., "tense posture", "relaxed stance")
+   
+   - Facial Expression (Required):
+     * Eye direction and focus
+     * Mouth position (e.g., "lips parted subtly")
+     * Overall expression (e.g., "focused expression")
+   
+   - Hand/Body Position (Required):
+     * Specific gestures
+     * Body orientation
+     * Movement state
+   
+   - Light Interaction (Required):
+     * How pose interacts with lighting
+     * Shadow placement
+     * Highlight positions
+   
+   Format: "[previous character traits], base posture, facial expression, hand/body position, light interaction"
+
+   Examples:
+   - "[previous character traits], standing at workshop doorway, tense posture, face turned slightly toward light source, chin slightly lowered, lips parted subtly, eyes catching highlight from sunbeam"
+   - "[previous character traits], leaning over workbench, focused expression, hands working deliberately, face illuminated by warm studio lights"
+   - "[previous character traits], silhouette in doorframe, tense posture, face in shadow, body catching edge light, hands gripping doorframe"
 
 2. environment:
-   - Start with shot type (ESTABLISHING SHOT, MEDIUM SHOT, CLOSE UP, etc.)
-   - Specify camera angle (low angle, high angle, eye level)
-   - Add compositional guidance (rule of thirds, centered, etc.)
-   - Specify exact location and setting
-   - Detail environmental elements (weather, time of day specifics)
-   - Include background elements that enhance visual storytelling
-   - Format: "SHOT TYPE - CAMERA ANGLE - COMPOSITION - LOCATION - TIME - LENS"
-   - Example: "MEDIUM SHOT - LOW ANGLE - RULE OF THIRDS - EXT. MARTIAN RIDGE - DAY - WIDE LENS (35mm:1.3)"
-   - Progress environment naturally (e.g., exterior → interior → specific location)
-   - Use environment to enhance mood and thematic elements
-   - Use environment to reflect character's emotional state
-   - Change environments to match story progression
-   - Include significant environmental details that enhance story
+   - Shot Type (Required):
+     * ESTABLISHING SHOT: Wide environment views with specific details
+     * MEDIUM SHOT: Character interaction spaces with concrete elements
+     * CLOSE UP: Emotional moments with specific visual focus
+     * EXTREME CLOSE UP: Intense detail shots with precise elements
+     * TRACKING SHOT: Dynamic movement spaces with clear paths
+   
+   - Camera Angle (Required):
+     * EYE LEVEL: Standard perspective with specific height reference
+     * LOW ANGLE: Looking up at subject with ground reference
+     * HIGH ANGLE: Looking down with ceiling/sky reference
+     * DUTCH ANGLE: Tilted perspective with specific angle
+   
+   - Composition (Required):
+     * RULE OF THIRDS: Specific element placement
+     * CENTERED: Symmetrical arrangement with clear focal point
+     * PORTRAIT FRAMING: Character-focused composition with specific positioning
+     * LEADING LINES: Clear directional elements with specific paths
+   
+   - Location Details (Required):
+     * INT./EXT.: Interior or exterior with specific space type
+     * Specific setting with concrete visual elements:
+       - Room type (e.g., "modern kitchen with stainless steel appliances")
+       - Architectural features (e.g., "floor-to-ceiling windows")
+       - Furniture placement (e.g., "wooden desk against wall")
+       - Lighting sources (e.g., "desk lamp casting warm glow")
+     * Time of day with specific lighting conditions
+     * Weather/conditions with visible effects
+   
+   Format: "SHOT TYPE - ANGLE - COMPOSITION - SPECIFIC LOCATION WITH VISUAL ELEMENTS - TIME - CONDITIONS"
+
+   Examples:
+   - "ESTABLISHING SHOT - EYE LEVEL - RULE OF THIRDS - EXT. MARTIAN RIDGE WITH RED ROCK FORMATIONS AND DUST DEVILS - DAY - DUST STORM WITH VISIBLE PARTICLES"
+   - "MEDIUM SHOT - LOW ANGLE - CENTERED - INT. DARK STUDIO WITH EXPOSED BRICK WALL AND SINGLE HANGING LIGHT BULB - NIGHT - FOG WITH VISIBLE LIGHT RAYS"
+   - "CLOSE UP - EYE LEVEL - PORTRAIT FRAMING - INT. WORKSHOP WITH CLUTTERED WOODEN BENCH AND SCATTERED TOOLS - DAY - NATURAL LIGHT STREAMING THROUGH DIRTY WINDOWS"
 
 3. atmosphere:
-   - Always include base quality terms: "(8k uhd:1.4), (photorealistic:1.4), (cinematic lighting:1.3)"
-   - Specify lighting direction (front lighting, backlighting, side lighting)
-   - Specify lighting quality (hard light, soft light, diffused light)
-   - Add depth of field information (shallow depth of field, deep focus)
-   - Add specific mood/lighting terms that enhance emotional tone
-   - Include technical aspects (lens type, color grading)
-   - Include color palette information (e.g., "(muted blues:1.3)", "(high contrast reds:1.4)")
-   - Format: "(quality1:1.4), (quality2:1.4), (lighting direction:1.3), (lighting quality:1.3), (depth of field:1.3), (mood:1.4), (color palette:1.4)"
-   - Example: "(8k uhd:1.4), (photorealistic:1.4), (cinematic lighting:1.3), (backlighting:1.3), (hard light:1.3), (shallow depth of field:1.3), (noir shadows:1.4), (cool blue tones:1.3)"
-   - Vary atmosphere to match scene progression and emotional tone
-   - Include mood/emotional quality descriptors (e.g., "(foreboding:1.4)", "(hopeful dawn:1.4)")
-   - Create color palette descriptors (e.g., "(cool blue tones:1.3)", "(warm golden hues:1.4)")
-   - Use atmosphere to reflect character's emotional state
-
-4. negative_prompt:
-   - Always include base quality negatives
-   - Add specific scene-appropriate negatives
-   - Format: "(artifact1:1.4), (artifact2:1.4)"
-   - Example: "(worst quality:1.4), (low quality:1.4), (blurry:1.2), (empty scene:1.4), (flat lighting:1.4)"
-   - Adjust negatives based on shot type (e.g., more anatomy negatives for character shots)
-
-5. clip_action:
-   - Format: "camera_movement, primary_animation"
-
-   1. Field Dependencies:
-      clip_action MUST ONLY reference elements explicitly defined in:
-      - environment: location, shot type, physical elements
-      - atmosphere: lighting conditions, effects, mood
-      - pose: character position and actions (if character shot)
-      - type: shot category (character/b-roll)
-
-   2. Animation Chain:
-      Build clip_action by validating each component:
-      camera_movement = get_valid_camera(shot_type, duration)
-      visible_elements = extract_visible_elements(environment, atmosphere, pose)
-      primary_animation = select_animation(visible_elements, lighting_conditions)
-
-   3. Visibility Chain:
-      environment -> atmosphere -> lighting -> visibility
-      Example:
-      "MEDIUM SHOT - INT. WORKSHOP - SUNSET" +
-      "(dramatic backlighting:1.4)" =
-      only animate elements that would be visible in backlit workshop
-
-   4. Technical Constraints:
-      - Camera: static, pan, tilt, track, dolly, zoom
-      - Movement: natural physics only
-      - Duration: must match clip_duration
-      - Elements: must exist in scene
-      - Lighting: must respect lighting conditions
-      - Scale: must match shot type
-
-   5. Validation Chain:
-      Each clip_action must validate:
-      exists(elements) AND
-      visible(elements, lighting) AND
-      supported(camera_movement) AND
-      matches(animation, physics) AND
-      appropriate(shot_type)
-
-   6. Error Prevention:
-      REJECT clip_action if:
-      - References undefined elements
-      - Violates lighting physics
-      - Exceeds technical limits
-      - Mismatches shot type
-      - Combines incompatible effects
-
-   7. Scale Requirements:
-      - Deterministic: Same inputs = Same clip_action
-      - Stateless: No dependency on previous shots
-      - Atomic: Each validation independent
-      - Extensible: Easy to add new rules
-      - Measurable: Clear success/failure criteria
-
-   1. Context Analysis Process:
-      BEFORE generating clip_action, analyze:
-      - environment field for location and elements
-      - atmosphere field for lighting and effects
-      - type field for shot category
-      - pose field for character position (if character shot)
-
-   2. Animation Selection Rules:
-
-      For Character Shots:
-      - MUST reference character pose from pose field
-      - MUST match lighting from atmosphere field
-      - MUST be visible in specified shot type
-      Example:
-      pose: "(standing at workshop doorway:1.4), (tense posture:1.3)"
-      atmosphere: "(dramatic backlighting:1.4), (silhouette effect:1.3)"
-      clip_action: "static camera, silhouette tensing in doorframe"
-
-      For B-Roll Shots:
-      - MUST reference elements from environment field
-      - MUST match effects from atmosphere field
-      - MUST be appropriate for shot type
-      Example:
-      environment: "ESTABLISHING SHOT - EXT. DESERT - SUNSET - DUST STORM"
-      atmosphere: "(golden hour:1.4), (volumetric lighting:1.3)"
-      clip_action: "slow pan right, dust clouds catching sunset light"
-
-   3. Visibility Rules:
-      Backlit Scenes (when atmosphere contains "backlighting" or "silhouette"):
-      - NO facial details or expressions
-      - YES full body silhouette movements
-      - YES environmental elements in light
-      
-      Front-lit Scenes:
-      - YES facial features and expressions
-      - YES detailed movements
-      - YES environmental interactions
-
-      Low-light Scenes:
-      - NO small details
-      - YES large movements
-      - YES light-based effects
-
-   4. Shot-Type Rules:
-      ESTABLISHING SHOT:
-      - YES environmental movements
-      - YES atmospheric effects
-      - NO character details
-      
-      MEDIUM SHOT:
-      - YES character movements
-      - YES environmental context
-      - NO extreme close details
-      
-      CLOSE UP:
-      - YES facial features (if front-lit)
-      - YES small details
-      - NO wide environmental effects
-
-   5. Common Mistakes to Avoid:
-      - Animating elements not mentioned in environment/pose
-      - Showing details impossible in current lighting
-      - Ignoring shot type limitations
-      - Using generic movements without scene context
-      - Combining incompatible effects
-
-   6. Validation Checklist:
-      ✓ Does animation reference actual elements from fields?
-      ✓ Is it possible in current lighting conditions?
-      ✓ Is it appropriate for shot type?
-      ✓ Does it match environmental context?
-      ✓ Is it technically feasible for CogVideoX?
-
-   7. Examples with Context:
-
-      Character in Backlight:
-      environment: "MEDIUM SHOT - INT. WORKSHOP DOORWAY - SUNSET"
-      atmosphere: "(dramatic backlighting:1.4), (silhouette effect:1.3)"
-      pose: "(standing at workshop doorway:1.4), (tense posture:1.3)"
-      CORRECT: "static camera, silhouette tensing in doorframe"
-      INCORRECT: "static camera, eyes narrowing slightly"
-
-      Desert Storm:
-      environment: "ESTABLISHING SHOT - EXT. DESERT - SUNSET - DUST STORM"
-      atmosphere: "(golden hour:1.4), (volumetric lighting:1.3)"
-      CORRECT: "slow pan right, dust clouds catching sunset light"
-      INCORRECT: "static camera, dust moving"
-
-      Character Close-up:
-      environment: "CLOSE UP - INT. WORKSHOP - DAY"
-      atmosphere: "(soft natural lighting:1.3), (diffused sunlight:1.3)"
-      pose: "(leaning over workbench:1.4), (focused expression:1.3)"
-      CORRECT: "static camera, hands working deliberately"
-      INCORRECT: "static camera, shadow moving"
-
-   8. Technical Requirements:
-      Camera Movements:
-      - static camera
-      - pan left/right
-      - pan up/down
-      - zoom in/out
-      - tracking shot left/right
-      - dolly in/out
-
-      Supported Effects:
-      - Environmental: dust, smoke, fog, rain, snow
-      - Lighting: sunbeams, shadows, reflections
-      - Character: basic movements, silhouettes
-      - Natural: leaves, water, clouds
-
-   9. Context-Matching Process:
-      1. Extract scene elements from fields
-      2. Identify lighting conditions
-      3. Check shot type constraints
-      4. Select appropriate camera movement
-      5. Choose visible and supported animation
-      6. Validate against scene context
-      7. Ensure technical feasibility
-
-Supported Camera Movements:
-1. Static camera
-2. Pan left/right
-3. Pan up/down
-4. Zoom in/out
-5. Tracking shot (left/right)
-6. Dolly in/out
-
-Environment-Specific Animations:
-1. Indoor scenes:
-   - Light flickering
-   - Curtains swaying
-   - Dust particles floating
-   - Steam rising
-   - Shadows moving
-
-2. Outdoor scenes:
-   - Cloud movement
-   - Leaves swaying
-   - Water rippling
-   - City lights twinkling
-   - Rain falling
-   - Snow drifting
-
-3. Urban scenes:
-   - Traffic lights changing
-   - Neon signs flickering
-   - Street lights glowing
-   - Windows lighting up
-   - Smoke rising
-
-4. Natural scenes:
-   - Grass swaying
-   - Waves moving
-   - Birds flying
-   - Trees swaying
-   - Fog drifting
-
-Character-Appropriate Animations:
-1. With hair:
-   - Hair swaying
-   - Hair blowing
-
-2. With eyes:
-   - Eye widening
-   - Eye narrowing
-   - Blinking
-
-3. With facial features:
-   - Basic expressions
-   - Simple head movements
-
-Examples of Valid clip_action:
-1. "static camera, clouds drifting slowly"
-2. "pan right, leaves swaying gently"
-3. "zoom in, water rippling"
-4. "tracking shot left, grass swaying"
-5. "dolly in, dust floating"
-6. "pan up, birds flying"
-7. "static camera, hair blowing"
-8. "zoom out, trees swaying"
-
-Examples of Invalid clip_action:
-1. "ESTABLISHING SHOT: character running complex choreography" (includes shot type and complex movement)
-2. "dramatic crane shot, emotional breakdown" (dramatic terminology and emotional state)
-3. "character performing acrobatics" (complex action)
-4. "look of determination" (emotional description)
-5. "expression of shock" (emotional state)
-6. "character tumbling through mirror" (complex movement)
-7. "body being pulled through mirror" (complex action)
-
-Common Mistakes to Avoid:
-1. Using emotional descriptions
-2. Describing complex movements
-3. Using dramatic terminology
-4. Writing long descriptions
-5. Combining multiple effects
-6. Using unsupported camera movements
-7. Including character emotions
-8. Describing complex actions
-9. Using cinematic terminology
-
-Remember:
-- Keep it simple
-- Focus on basic movements
-- Use supported effects only
-- Match environment context
-- Avoid emotional descriptions
-- No complex movements
-- No dramatic terminology
-
-Shot Progression Guidelines:
-1. Opening Sequence:
-   - Start with ESTABLISHING SHOT (wide)
-   - Follow with another wide shot
-   - Introduce character with MEDIUM SHOT
-   - Return to wide shot
-   - Use gentle camera movements
+   - Base Quality (Required):
+     * "8k uhd, photorealistic, cinematic lighting"
+     * "8k uhd, photorealistic, natural lighting"
+     * "8k uhd, photorealistic, studio lighting quality"
    
-2. Common Patterns:
-   - "wide -> wide -> wide" (most common)
-   - "wide -> medium -> wide" (second most common)
-   - "wide -> wide -> medium" (third most common)
-   - "medium -> wide -> wide" (fourth most common)
-   - "medium -> wide -> medium" (fifth most common)
-   - "wide -> close-up -> wide" (for emotional emphasis)
-   - "medium -> close-up -> medium" (for character focus)
+   - Technical Quality (Required):
+     * "sharp details, high contrast ratio"
+     * "cinematic color grading, professional quality"
+     * "studio portrait quality, sharp details"
+   
+   - Lighting Direction (Required):
+     * "natural sunlight, dramatic shadows"
+     * "dramatic backlighting, silhouette effect"
+     * "soft natural lighting, diffused sunlight"
+   
+   - Color Palette (Required):
+     * "high contrast, dark background, warm highlights"
+     * "deep blacks in background, warm highlights on skin"
+     * "cool blue tones, warm golden accents"
+   
+   - Special Effects (Optional):
+     * "volumetric lighting, lens flares"
+     * "atmospheric haze, light diffusion"
+     * "cinematic vignette, color grading"
 
-Timing Pattern Analysis:
-1. Most Common Timing Patterns:
-   - "wide 2.5s -> wide 2.5s -> wide 2.5s"
-   - "wide 2.3s -> wide 2.4s -> wide 2.5s"
-   - "wide 7s -> medium 3s -> wide 2s"
-   - "wide 3s -> wide 3s -> wide 3s"
-   - "wide 2s -> wide 2s -> wide 2s"
-   - "medium 6s -> close-up 2s -> medium 5s" (for character focus)
-   - "wide 4s -> close-up 2s -> wide 3s" (for emotional emphasis)
+   Format: Combine elements in this order:
+   "base quality, technical quality, lighting direction, color palette, special effects"
 
-2. Timing Pattern Principles:
-   - Consistent timing creates rhythm (e.g., three 2.5s shots)
-   - Gradual timing changes create flow (e.g., 2.3s -> 2.4s -> 2.5s)
-   - Contrasting timing creates emphasis (e.g., 7s -> 3s -> 2s)
-   - Shorter shots increase pace and tension
-   - Longer shots allow for contemplation and atmosphere
-   - Close-ups are typically shorter (2.0-3.0s) to maintain visual energy
+   Examples:
+   - "8k uhd, photorealistic, natural sunlight, dramatic shadows, high contrast, dark background, studio lighting quality, sharp details, cinematic color grading"
+   - "8k uhd, photorealistic, dramatic backlighting, silhouette effect, deep blacks in background, warm highlights on skin, studio portrait quality, sharp details"
+   - "8k uhd, photorealistic, soft natural lighting, diffused sunlight, cool blue tones, warm golden accents, cinematic color grading, professional quality"
 
-Rhythm Pattern Guidelines:
-1. Consistent Rhythm:
-   - Use three similar shots with similar durations (e.g., three 2.5s wide shots)
-   - This creates a stable, rhythmic foundation
+5. CLIP_ACTION GENERATION GUIDELINES:
 
-2. Contrast Rhythm:
-   - Follow a long shot with shorter shots (e.g., 7s -> 3s -> 2s)
-   - This creates emphasis and visual interest
+   CORE PRINCIPLES:
+   - Each clip_action MUST ONLY reference elements visible in the SD3.5 image
+   - Be highly detailed in describing the movement, but keep the movement itself simple
+   - Focus on rich, cinematic descriptions of basic movements
+   - Match the emotional context while staying technically feasible
+   - Use professional cinematography terminology for quality
 
-3. Building Rhythm:
-   - Gradually increase shot durations (e.g., 2.3s -> 2.4s -> 2.5s)
-   - This creates a sense of building tension
+   STRICT PROHIBITIONS:
+   - NO referencing elements not visible in the image
+   - NO complex or multiple simultaneous movements
+   - NO camera movements (CogVideoX handles this separately)
+   - NO emotional descriptions without physical movement
+   - NO actions that require multiple steps or coordination
+   - NO describing multiple people or objects unless explicitly visible
+   - NO describing actions that would require complex animation
 
-4. Decreasing Rhythm:
-   - Gradually decrease shot durations (e.g., 2.9s -> 1.9s -> 1.0s)
-   - This creates a sense of urgency or resolution
+   CONTEXT AWARENESS:
+   For Character Shots:
+   - ONLY reference visible character elements from pose field
+   - Use rich detail to describe simple movements
+   - Example:
+     pose: "standing at workshop doorway, tense posture"
+     clip_action: "fabric rippling delicately as breath escapes, shadows shifting subtly across features"
 
-5. Shot Type Transitions:
-   - Wide -> Medium -> Wide: Creates focus then context
-   - Wide -> Wide -> Medium: Builds to a character moment
-   - Medium -> Wide -> Wide: Starts with focus, expands to context
-   - Wide -> Close-up -> Wide: Creates emotional emphasis
-   - Medium -> Close-up -> Medium: Maintains character focus
-   - Close-up -> Wide -> Close-up: Creates visual contrast
+   For B-Roll Shots:
+   - ONLY reference visible environment elements
+   - Use rich detail to describe simple movements
+   - Example:
+     environment: "ESTABLISHING SHOT - EXT. DESERT - SUNSET - DUST STORM"
+     clip_action: "dust particles catching golden light as they drift upward, creating delicate patterns of illumination"
 
-Close-up Usage Guidelines:
-1. Emotional Moments:
-   - Use close-ups for character reactions and emotional responses
-   - Typical duration: 2.0-3.0 seconds
-   - Often paired with internal dialogue in voice narration
+   DETAILED MOVEMENT GUIDELINES:
+   1. Character Movements:
+      - Rich descriptions of subtle posture shifts
+      - Detailed observations of gentle head turns
+      - Cinematic descriptions of breathing movements
+      - Professional detail of fabric movement
+      - Artistic descriptions of simple gestures
 
-2. Detail Emphasis:
-   - Use close-ups to highlight important objects or details
-   - Typical duration: 1.5-2.5 seconds
-   - Often used in mystery or discovery moments
+   2. Environmental Movements:
+      - Detailed observations of particle drift
+      - Cinematic descriptions of leaf movement
+      - Professional detail of water ripple
+      - Artistic descriptions of dust floating
+      - Rich detail of smoke curl
 
-3. Transitional Close-ups:
-   - Use close-ups as transitions between wider shots
-   - Creates visual variety and maintains viewer interest
-   - Often used in montage sequences
+   DURATION-BASED COMPLEXITY:
+   - 2.0-2.5s: Single movement with rich detail
+   - 2.5-3.0s: Two related movements with cinematic detail
+   - 3.0-4.0s: Two to three related movements with professional detail
+   - 4.0-5.0s: Three to four related movements with artistic detail
+   - 5.0-6.0s: Four to five related movements with rich cinematic detail
 
-4. Close-up Patterns:
-   - Wide -> Close-up -> Wide: Creates emotional emphasis
-   - Medium -> Close-up -> Medium: Maintains character focus
-   - Close-up -> Wide -> Close-up: Creates visual contrast
-   - Multiple close-ups in sequence: Creates intensity and focus
+   VALIDATION CHECKLIST:
+   ✓ Does it ONLY reference visible elements?
+   ✓ Is the movement simple but described in detail?
+   ✓ Does it avoid complex or multiple movements?
+   ✓ Is it technically feasible for CogVideoX?
+   ✓ Does it match the emotional context?
+   ✓ Does it use rich, cinematic language?
+   ✓ Does it avoid describing multiple people/objects?
+   ✓ Does it avoid complex animation requirements?
 
-5. Close-up Composition:
-   - Focus on eyes, hands, or specific facial features
-   - Use shallow depth of field for emphasis
-   - Consider lighting direction for dramatic effect
-   - Match close-up composition to emotional content
+   EXAMPLES:
+   Good (Detailed but Simple Movements):
+   - "fabric rippling delicately as breath escapes, shadows shifting subtly across features"
+   - "dust particles catching golden light as they drift upward, creating delicate patterns of illumination"
+   - "leaves swaying gently in breeze, dappled light dancing across their surface"
+   - "water rippling softly, reflections of sky creating intricate patterns of light"
+   - "smoke curling upward slowly, wisps catching the warm glow of sunset"
 
-Shot Types:
-- ESTABLISHING SHOT: Wide shots showing environment
-- MEDIUM SHOT: Full body or waist-up shots
-- CLOSE UP: Head and shoulders or closer
-- WIDE SHOT: Full environment with character
-- LOW ANGLE: Looking up at subject
-- HIGH ANGLE: Looking down at subject
+   Bad (Complex or Invisible Elements):
+   - "character performing complex choreography"
+   - "multiple elements moving in different directions"
+   - "referencing off-screen elements or actions"
+   - "emotional descriptions without physical movement"
+   - "actions requiring coordination or multiple steps"
+   - "multiple people moving through the scene"
+   - "complex interactions between objects"
+   - "describing elements not visible in the image"
 
-Shot Duration Guidelines:
-1. Shot Types:
-   - Wide shots: 2.5-4.5 seconds (most common)
-   - Medium shots: 6.0-7.0 seconds (longer, more deliberate)
-   - Close-ups: 2.0-3.0 seconds (intimate, focused)
-   - Character scenes: 4.0-5.0 seconds
-   - B-roll scenes: 3.0-4.0 seconds
-   - Pattern: wide 2.5s -> wide 2.5s -> wide 2.5s (most common rhythm)
+   CORRECTED EXAMPLES:
+   Original: "static camera, eyes scanning contact sheet of photographs, fingers tracing lines between images, subtle shift in posture as revelation forms, breath creating slight movement in shoulders"
+   Corrected: "fabric rippling delicately as breath escapes, shadows shifting subtly across features, posture adjusting slightly"
 
-Technical Guidelines:
-1. Camera Movement:
-   - Start gentle (pans, tilts)
-   - Progress to tracking
-   - Add dynamic movements for tension
-   - Return to gentle for resolution
+   Original: "static camera, industrial workers streaming through concrete passage, faces tired but determined, steam rising from vents creating atmospheric haze, shadows casting patterns across moving figures"
+   Corrected: "steam rising slowly from vents, creating delicate patterns of light and shadow across the concrete surface"
 
-2. Lighting Progression:
-   - Begin with natural/ambient
-   - Add dramatic lighting
-   - Use practical sources
-   - Create mood through lighting
+6. SHOT PROGRESSION AND TIMING GUIDELINES:
 
-3. Shot Duration:
-   - Establishing shots: 4.0-6.0 seconds
-   - Medium shots: 2.5-3.5 seconds
-   - Close-ups: 1.5-2.5 seconds
-   - Tracking shots: 3.0-4.0 seconds
+   Shot Progression Guidelines:
+   1. Opening Sequence:
+      - Start with ESTABLISHING SHOT (wide)
+      - Follow with another wide shot
+      - Introduce character with MEDIUM SHOT
+      - Return to wide shot
+      - Use gentle camera movements
+   
+   2. Common Patterns:
+      - "wide -> wide -> wide" (most common)
+      - "wide -> medium -> wide" (second most common)
+      - "wide -> wide -> medium" (third most common)
+      - "medium -> wide -> wide" (fourth most common)
+      - "medium -> wide -> medium" (fifth most common)
+      - "wide -> close-up -> wide" (for emotional emphasis)
+      - "medium -> close-up -> medium" (for character focus)
 
-4. Visual Continuity:
-   - Maintain consistent color grading
-   - Match lighting between shots
-   - Keep character appearance consistent
-   - Progress environment naturally
+   Timing Pattern Analysis:
+   1. Most Common Timing Patterns:
+      - "wide 2.5s -> wide 2.5s -> wide 2.5s"
+      - "wide 2.3s -> wide 2.4s -> wide 2.5s"
+      - "wide 7s -> medium 3s -> wide 2s"
+      - "wide 3s -> wide 3s -> wide 3s"
+      - "wide 2s -> wide 2s -> wide 2s"
+      - "medium 6s -> close-up 2s -> medium 5s" (for character focus)
+      - "wide 4s -> close-up 2s -> wide 3s" (for emotional emphasis)
 
-Shot Types and Their Uses:
-1. ESTABLISHING SHOT:
-   - Wide shots showing environment
-   - Used for scene setting and context
-   - Often at the start of a sequence
-   - Example: "ESTABLISHING SHOT - low angle - rule of thirds - small midwestern town, dusk, neon signs, fog rolling in"
+   2. Timing Pattern Principles:
+      - Consistent timing creates rhythm (e.g., three 2.5s shots)
+      - Gradual timing changes create flow (e.g., 2.3s -> 2.4s -> 2.5s)
+      - Contrasting timing creates emphasis (e.g., 7s -> 3s -> 2s)
+      - Shorter shots increase pace and tension
+      - Longer shots allow for contemplation and atmosphere
+      - Close-ups are typically shorter (2.0-3.0s) to maintain visual energy
 
-2. MEDIUM SHOT:
-   - Full body or waist-up shots
-   - Used for character action and interaction
-   - Good for showing movement and gestures
-   - Example: "MEDIUM SHOT - eye level - centered - high school hallway, lockers, scattered papers, flickering lights"
+   Rhythm Pattern Guidelines:
+   1. Consistent Rhythm:
+      - Use three similar shots with similar durations (e.g., three 2.5s wide shots)
+      - This creates a stable, rhythmic foundation
 
-3. CLOSE UP:
-   - Head and shoulders or closer
-   - Used for emotional moments and details
-   - Good for showing reactions and expressions
-   - Example: "CLOSE UP - eye level - rule of thirds - face illuminated by flashlight, black veins in background, sweat dripping"
+   2. Contrast Rhythm:
+      - Follow a long shot with shorter shots (e.g., 7s -> 3s -> 2s)
+      - This creates emphasis and visual interest
 
-4. TRACKING SHOT:
-   - Following character movement
-   - Used for dynamic scenes and chase sequences
-   - Maintains continuous motion
-   - Example: "TRACKING SHOT - low angle - rule of thirds - school corridor, emergency lights, papers flying, smoke rising"
+   3. Building Rhythm:
+      - Gradually increase shot durations (e.g., 2.3s -> 2.4s -> 2.5s)
+      - This creates a sense of building tension
 
-5. AERIAL SHOT:
-   - Overhead or elevated perspective
-   - Used for establishing scale and scope
-   - Good for dramatic reveals
-   - Example: "AERIAL SHOT - high angle - centered - small town, spreading darkness, lights going out, storm clouds gathering"
+   4. Decreasing Rhythm:
+      - Gradually decrease shot durations (e.g., 2.9s -> 1.9s -> 1.0s)
+      - This creates a sense of urgency or resolution
 
-Visual Storytelling Structure:
-1. Character Consistency:
-   - Character traits from the "character" section must be referenced in every character shot's pose
-   - Use [previous character traits] to include all character traits in poses
-   - Example: "pose": "[previous character traits], (sitting:1.4)"
-   - This ensures visual consistency across all character shots
+   5. Shot Type Transitions:
+      - Wide -> Medium -> Wide: Creates focus then context
+      - Wide -> Wide -> Medium: Builds to a character moment
+      - Medium -> Wide -> Wide: Starts with focus, expands to context
+      - Wide -> Close-up -> Wide: Creates emotional emphasis
+      - Medium -> Close-up -> Medium: Maintains character focus
+      - Close-up -> Wide -> Close-up: Creates visual contrast
 
-2. Shot Types and Sequence:
-   - "b-roll": Establishing shots and environment details
-   - "character": Shots featuring main characters
-   - Sequence must follow: Start with b-roll → Introduce character → Mix detail shots → End with b-roll
-   - For character shots, always include pose with [previous character traits]
-   - For b-roll shots, focus on environment and atmosphere
-   - Never use "environment" or "object" as type - only "b-roll" or "character"
+   Close-up Usage Guidelines:
+   1. Emotional Moments:
+      - Use close-ups for character reactions and emotional responses
+      - Typical duration: 2.0-3.0 seconds
+      - Often paired with internal dialogue in voice narration
 
-3. Token Management:
-   - Positive Prompt: 77 tokens maximum
-   - Negative Prompt: 77 tokens maximum
-   - Weighted Terms: (term:1.4) = 3 tokens
-   - Include all character traits in poses while staying within token limits
+   2. Detail Emphasis:
+      - Use close-ups to highlight important objects or details
+      - Typical duration: 1.5-2.5 seconds
+      - Often used in mystery or discovery moments
 
-B-Roll Guidelines:
-1. Establishing B-Roll:
-   - Wide establishing shots
-   - Environment introduction
-   - Setting the mood
-   - Example: "ESTABLISHING SHOT - small midwestern town, dusk, neon signs"
+   3. Transitional Close-ups:
+      - Use close-ups as transitions between wider shots
+      - Creates visual variety and maintains viewer interest
+      - Often used in montage sequences
 
-2. Environmental B-Roll:
-   - Show setting details
-   - Create atmosphere
-   - Build tension
-   - Example: "MEDIUM SHOT - abandoned factory, rusted machinery, broken windows"
+   4. Close-up Patterns:
+      - Wide -> Close-up -> Wide: Creates emotional emphasis
+      - Medium -> Close-up -> Medium: Maintains character focus
+      - Close-up -> Wide -> Close-up: Creates visual contrast
+      - Multiple close-ups in sequence: Creates intensity and focus
 
-3. Detail B-Roll:
-   - Close-up details
-   - Important objects
-   - Environmental clues
-   - Example: "CLOSE UP - old photograph, torn edges, faded colors"
+   5. Close-up Composition:
+      - Focus on eyes, hands, or specific facial features
+      - Use shallow depth of field for emphasis
+      - Consider lighting direction for dramatic effect
+      - Match close-up composition to emotional content
 
-4. Transition B-Roll:
-   - Smooth scene transitions
-   - Location changes
-   - Time passage
-   - Example: "TRACKING SHOT - city streets, changing neighborhoods, evolving architecture"
+   Shot Types:
+   - ESTABLISHING SHOT: Wide shots showing environment
+   - MEDIUM SHOT: Full body or waist-up shots
+   - CLOSE UP: Head and shoulders or closer
+   - WIDE SHOT: Full environment with character
+   - LOW ANGLE: Looking up at subject
+   - HIGH ANGLE: Looking down at subject
 
-5. Mood B-Roll:
-   - Emotional atmosphere
-   - Symbolic elements
-   - Thematic reinforcement
-   - Example: "AERIAL SHOT - storm clouds gathering, lightning flashes, city below"
+   Shot Duration Guidelines:
+   1. Shot Types:
+      - Wide shots: 2.5-4.5 seconds (most common)
+      - Medium shots: 6.0-7.0 seconds (longer, more deliberate)
+      - Close-ups: 2.0-3.0 seconds (intimate, focused)
+      - Character scenes: 4.0-5.0 seconds
+      - B-roll scenes: 3.0-4.0 seconds
+      - Pattern: wide 2.5s -> wide 2.5s -> wide 2.5s (most common rhythm)
 
-6. Action B-Roll:
-   - Dynamic elements
-   - Movement and motion
-   - Environmental reactions
-   - Example: "TRACKING SHOT - papers flying, debris scattering, chaos unfolding"
+   Technical Guidelines:
+   1. Camera Movement:
+      - Start gentle (pans, tilts)
+      - Progress to tracking
+      - Add dynamic movements for tension
+      - Return to gentle for resolution
 
-7. Character Context B-Roll:
-   - Character environment
-   - Personal space
-   - Emotional setting
-   - Example: "MEDIUM SHOT - messy bedroom, scattered belongings, personal items"
+   2. Lighting Progression:
+      - Begin with natural/ambient
+      - Add dramatic lighting
+      - Use practical sources
+      - Create mood through lighting
 
-8. Climactic B-Roll:
-   - Dramatic reveals
-   - Plot points
-   - Story moments
-   - Example: "ESTABLISHING SHOT - massive explosion, debris flying, smoke rising"
+   3. Shot Duration:
+      - Establishing shots: 4.0-6.0 seconds
+      - Medium shots: 2.5-3.5 seconds
+      - Close-ups: 1.5-2.5 seconds
+      - Tracking shots: 3.0-4.0 seconds
 
-9. Resolution B-Roll:
-   - Story conclusion
-   - Aftermath
-   - New beginning
-   - Example: "AERIAL SHOT - sunrise over city, smoke clearing, hope emerging"
+   4. Visual Continuity:
+      - Maintain consistent color grading
+      - Match lighting between shots
+      - Keep character appearance consistent
+      - Progress environment naturally
 
-10. B-Roll to Character Ratio:
-    - Maintain 70% b-roll, 30% character shots
-    - Use b-roll for story progression
-    - Save character shots for key moments
-    - Build tension through b-roll
-    - Create atmosphere with b-roll
-    - Use b-roll for transitions
-    - Show environment through b-roll
-    - Build story through b-roll
-    - Create mood with b-roll
-    - Use b-roll for symbolism
+   Shot Types and Their Uses:
+   1. ESTABLISHING SHOT:
+      - Wide shots showing environment
+      - Used for scene setting and context
+      - Often at the start of a sequence
+      - Example: "ESTABLISHING SHOT - low angle - rule of thirds - small midwestern town, dusk, neon signs, fog rolling in"
 
-11. B-Roll Progression:
-    - Start with establishing shots
-    - Build environment gradually
-    - Show details progressively
-    - Create tension through b-roll
-    - Use b-roll for transitions
-    - Build to climactic moments
-    - Show resolution through b-roll
-    - Maintain visual continuity
-    - Create emotional impact
-    - Build story through b-roll
+   2. MEDIUM SHOT:
+      - Full body or waist-up shots
+      - Used for character action and interaction
+      - Good for showing movement and gestures
+      - Example: "MEDIUM SHOT - eye level - centered - high school hallway, lockers, scattered papers, flickering lights"
 
-12. B-Roll Technical Requirements:
-    - Match environment description
-    - Follow lighting progression
-    - Maintain visual consistency
-    - Use appropriate shot types
-    - Consider camera movement
-    - Match atmosphere settings
-    - Follow duration guidelines
-    - Maintain quality standards
-    - Use appropriate effects
-    - Follow cinematic rules
+   3. CLOSE UP:
+      - Head and shoulders or closer
+      - Used for emotional moments and details
+      - Good for showing reactions and expressions
+      - Example: "CLOSE UP - eye level - rule of thirds - face illuminated by flashlight, black veins in background, sweat dripping"
 
-13. B-Roll Examples:
-    - Establishing: "ESTABLISHING SHOT - low angle - rule of thirds - ancient castle, stormy night, lightning flashes, fog rolling in"
-    - Environmental: "MEDIUM SHOT - eye level - centered - misty forest, twisted trees, hanging moss, dappled sunlight"
-    - Detail: "CLOSE UP - eye level - rule of thirds - old key, rusted metal, intricate details, cobwebs"
-    - Transition: "TRACKING SHOT - low angle - rule of thirds - changing seasons, leaves falling, snow beginning, wind blowing"
-    - Mood: "AERIAL SHOT - high angle - centered - dark clouds, rain falling, city lights below, lightning in distance"
-    - Action: "TRACKING SHOT - low angle - rule of thirds - papers flying, debris scattering, chaos unfolding, smoke rising"
-    - Character Context: "MEDIUM SHOT - eye level - centered - messy office, scattered papers, personal items, dim lighting"
-    - Climactic: "ESTABLISHING SHOT - low angle - rule of thirds - massive explosion, debris flying, smoke rising, fire spreading"
-    - Resolution: "AERIAL SHOT - high angle - centered - sunrise over city, smoke clearing, hope emerging, birds flying"
+   4. TRACKING SHOT:
+      - Following character movement
+      - Used for dynamic scenes and chase sequences
+      - Maintains continuous motion
+      - Example: "TRACKING SHOT - low angle - rule of thirds - school corridor, emergency lights, papers flying, smoke rising"
 
-14. B-Roll Quality Control:
-    - Check environment match
-    - Verify lighting consistency
-    - Ensure visual continuity
-    - Validate shot types
-    - Confirm camera movement
-    - Check atmosphere settings
-    - Verify duration
-    - Validate quality
-    - Check effects
-    - Confirm cinematic rules
+   5. AERIAL SHOT:
+      - Overhead or elevated perspective
+      - Used for establishing scale and scope
+      - Good for dramatic reveals
+      - Example: "AERIAL SHOT - high angle - centered - small town, spreading darkness, lights going out, storm clouds gathering"
 
-15. B-Roll Best Practices:
-    - Start wide, then detail
-    - Build environment gradually
-    - Show details progressively
-    - Create tension through b-roll
-    - Use b-roll for transitions
-    - Build to climactic moments
-    - Show resolution through b-roll
-    - Maintain visual continuity
-    - Create emotional impact
-    - Build story through b-roll
+   Visual Storytelling Structure:
+   1. Character Consistency:
+      - Character traits from the "character" section must be referenced in every character shot's pose
+      - Use [previous character traits] to include all character traits in poses
+      - Example: "pose": "[previous character traits], (sitting:1.4)"
+      - This ensures visual consistency across all character shots
 
-Voice Narration Guidelines:
-1. Cinematic Storytelling Priority:
-   - Visual storytelling should drive the narrative
-   - Narration should complement visuals, not replace them
-   - Use silence ("...") to let visuals breathe and create mood
-   - Follow the "show, don't tell" principle of cinema
+   2. Shot Types and Sequence:
+      - "b-roll": Establishing shots and environment details
+      - "character": Shots featuring main characters
+      - Sequence must follow: Start with b-roll → Introduce character → Mix detail shots → End with b-roll
+      - For character shots, always include pose with [previous character traits]
+      - For b-roll shots, focus on environment and atmosphere
+      - Never use "environment" or "object" as type - only "b-roll" or "character"
 
-2. Internal Dialogue Rules:
-   - Use first-person internal thoughts only
-   - Keep internal dialogue brief and impactful
-   - Internal dialogue should reveal character's emotional state
-   - Avoid describing what's visually obvious
-   - Use internal dialogue for subtext and deeper meaning
+   3. Token Management:
+      - Positive Prompt: 77 tokens maximum
+      - Include all character traits in poses while staying within token limits
 
-3. Narration Distribution:
-   - Use "..." for establishing shots (let visuals set the scene)
-   - Use "..." for action sequences (let visuals drive the action)
-   - Use "..." for emotional moments (let visuals convey emotion)
-   - Include internal dialogue for key decisions or revelations
-   - Include internal dialogue for character's private thoughts
+   B-Roll Guidelines:
+   1. Establishing B-Roll:
+      - Wide establishing shots
+      - Environment introduction
+      - Setting the mood
+      - Example: "ESTABLISHING SHOT - small midwestern town, dusk, neon signs"
 
-4. Duration Guidelines:
-   - Internal dialogue should be approximately 70% of clip_duration
-   - For example, a 3-second clip should have dialogue that takes about 2 seconds to speak
-   - Keep internal dialogue short for quick cuts (1-2 seconds)
-   - Allow longer internal dialogue for contemplative moments (3-4 seconds)
+   2. Environmental B-Roll:
+      - Show setting details
+      - Create atmosphere
+      - Build tension
+      - Example: "MEDIUM SHOT - abandoned factory, rusted machinery, broken windows"
 
-5. Cinematic Examples:
-   - ESTABLISHING SHOT: "..." (let the environment tell the story)
-   - ACTION SEQUENCE: "..." (let the action speak for itself)
-   - EMOTIONAL MOMENT: "..." (let the visuals convey emotion)
-   - KEY DECISION: Brief internal dialogue (reveal character's choice)
-   - REVELATION: Brief internal dialogue (reveal character's realization)
+   3. Detail B-Roll:
+      - Close-up details
+      - Important objects
+      - Environmental clues
+      - Example: "CLOSE UP - old photograph, torn edges, faded colors"
 
-6. When to Use Internal Dialogue:
-   - Character making a significant decision
-   - Character experiencing a revelation
-   - Character's private thoughts that can't be shown visually
-   - Character's emotional state that needs verbal expression
-   - Character's interpretation of events that adds depth
+   4. Transition B-Roll:
+      - Smooth scene transitions
+      - Location changes
+      - Time passage
+      - Example: "TRACKING SHOT - city streets, changing neighborhoods, evolving architecture"
 
-7. When to Use Silence ("..."):
-   - Establishing shots and scene setting
-   - Action sequences and movement
-   - Emotional moments and reactions
-   - Visual storytelling sequences
-   - Transitions between scenes
-   - When visuals alone tell the story effectively
+   5. Mood B-Roll:
+      - Emotional atmosphere
+      - Symbolic elements
+      - Thematic reinforcement
+      - Example: "AERIAL SHOT - storm clouds gathering, lightning flashes, city below"
 
-8. Voice Narration Duration Rules:
-   - Internal dialogue MUST be shorter than clip_duration
-   - Calculate approximate spoken duration based on word count:
-     * Average speaking rate: 2.5 words per second
-     * Add 0.5 seconds buffer for natural pauses
-   - STRICT WORD COUNT LIMITS:
-     * 2-second clip: Maximum 3 words
-     * 3-second clip: Maximum 5 words
-     * 4-second clip: Maximum 7 words
-     * 5-second clip: Maximum 9 words
-     * 6-second clip: Maximum 11 words
-   - If narration exceeds these limits:
-     * ALWAYS shorten the narration to fit
-     * NEVER split into multiple clips
-     * NEVER increase clip_duration
-   - Examples of valid dialogue lengths:
-     * 2s clip: "What is that?"
-     * 3s clip: "Something's wrong here"
-     * 4s clip: "I have to find it now"
-     * 5s clip: "This can't be happening to us"
-     * 6s clip: "I need to stop this before it's too late"
+   6. Action B-Roll:
+      - Dynamic elements
+      - Movement and motion
+      - Environmental reactions
+      - Example: "TRACKING SHOT - papers flying, debris scattering, chaos unfolding"
 
-9. Duration Validation Examples:
-   - ESTABLISHING SHOT (5s): "..." (silence)
-   - QUICK REACTION (2s): "What is that?" (3 words = ~1.2s)
-   - EMOTIONAL MOMENT (3s): "..." (silence)
-   - KEY DECISION (4s): "I have to try" (4 words = ~1.6s)
-   - REVELATION (5s): "This changes everything" (3 words = ~1.2s)
+   7. Character Context B-Roll:
+      - Character environment
+      - Personal space
+      - Emotional setting
+      - Example: "MEDIUM SHOT - messy bedroom, scattered belongings, personal items"
 
-10. Duration Guidelines by Shot Type:
-    - ESTABLISHING SHOT (4-6s): "..." (silence)
-    - MEDIUM SHOT (3-4s): Brief internal dialogue (3-5 words)
-    - CLOSE UP (2-3s): Very brief internal dialogue (2-3 words)
-    - TRACKING SHOT (3-4s): Brief internal dialogue (3-5 words)
-    - AERIAL SHOT (4-5s): "..." (silence)
+   8. Climactic B-Roll:
+      - Dramatic reveals
+      - Plot points
+      - Story moments
+      - Example: "ESTABLISHING SHOT - massive explosion, debris flying, smoke rising"
+
+   9. Resolution B-Roll:
+      - Story conclusion
+      - Aftermath
+      - New beginning
+      - Example: "AERIAL SHOT - sunrise over city, smoke clearing, hope emerging"
+
+   10. B-Roll to Character Ratio:
+       - Maintain 70% b-roll, 30% character shots
+       - Use b-roll for story progression
+       - Save character shots for key moments
+       - Build tension through b-roll
+       - Create atmosphere with b-roll
+       - Use b-roll for transitions
+       - Show environment through b-roll
+       - Build story through b-roll
+       - Create mood with b-roll
+       - Use b-roll for symbolism
+
+   11. B-Roll Progression:
+       - Start with establishing shots
+       - Build environment gradually
+       - Show details progressively
+       - Create tension through b-roll
+       - Use b-roll for transitions
+       - Build to climactic moments
+       - Show resolution through b-roll
+       - Maintain visual continuity
+       - Create emotional impact
+       - Build story through b-roll
+
+   12. B-Roll Technical Requirements:
+       - Match environment description
+       - Follow lighting progression
+       - Maintain visual consistency
+       - Use appropriate shot types
+       - Consider camera movement
+       - Match atmosphere settings
+       - Follow duration guidelines
+       - Maintain quality standards
+       - Use appropriate effects
+       - Follow cinematic rules
+
+   13. B-Roll Examples:
+       - Establishing: "ESTABLISHING SHOT - low angle - rule of thirds - ancient castle, stormy night, lightning flashes, fog rolling in"
+       - Environmental: "MEDIUM SHOT - eye level - centered - misty forest, twisted trees, hanging moss, dappled sunlight"
+       - Detail: "CLOSE UP - eye level - rule of thirds - old key, rusted metal, intricate details, cobwebs"
+       - Transition: "TRACKING SHOT - low angle - rule of thirds - changing seasons, leaves falling, snow beginning, wind blowing"
+       - Mood: "AERIAL SHOT - high angle - centered - dark clouds, rain falling, city lights below, lightning in distance"
+       - Action: "TRACKING SHOT - low angle - rule of thirds - papers flying, debris scattering, chaos unfolding, smoke rising"
+       - Character Context: "MEDIUM SHOT - eye level - centered - messy office, scattered papers, personal items, dim lighting"
+       - Climactic: "ESTABLISHING SHOT - low angle - rule of thirds - massive explosion, debris flying, smoke rising, fire spreading"
+       - Resolution: "AERIAL SHOT - high angle - centered - sunrise over city, smoke clearing, hope emerging, birds flying"
+
+   14. B-Roll Quality Control:
+       - Check environment match
+       - Verify lighting consistency
+       - Ensure visual continuity
+       - Validate shot types
+       - Confirm camera movement
+       - Check atmosphere settings
+       - Verify duration
+       - Validate quality
+       - Check effects
+       - Confirm cinematic rules
+
+   15. B-Roll Best Practices:
+       - Start wide, then detail
+       - Build environment gradually
+       - Show details progressively
+       - Create tension through b-roll
+       - Use b-roll for transitions
+       - Build to climactic moments
+       - Show resolution through b-roll
+       - Maintain visual continuity
+       - Create emotional impact
+       - Build story through b-roll
+
+   Voice Narration Guidelines:
+   1. Cinematic Storytelling Priority:
+      - Visual storytelling should drive the narrative
+      - Narration should complement visuals, not replace them
+      - Use silence ("...") to let visuals breathe and create mood
+      - Follow the "show, don't tell" principle of cinema
+
+   2. Internal Dialogue Rules:
+      - Use first-person internal thoughts only
+      - Keep internal dialogue brief and impactful
+      - Internal dialogue should reveal character's emotional state
+      - Avoid describing what's visually obvious
+      - Use internal dialogue for subtext and deeper meaning
+
+   3. Narration Distribution:
+      - Use "..." for establishing shots (let visuals set the scene)
+      - Use "..." for action sequences (let visuals drive the action)
+      - Use "..." for emotional moments (let visuals convey emotion)
+      - Include internal dialogue for key decisions or revelations
+      - Include internal dialogue for character's private thoughts
+
+   4. Duration Guidelines:
+      - Internal dialogue should be approximately 70% of clip_duration
+      - For example, a 3-second clip should have dialogue that takes about 2 seconds to speak
+      - Keep internal dialogue short for quick cuts (1-2 seconds)
+      - Allow longer internal dialogue for contemplative moments (3-4 seconds)
+
+   5. Cinematic Examples:
+      - ESTABLISHING SHOT: "..." (let the environment tell the story)
+      - ACTION SEQUENCE: "..." (let the action speak for itself)
+      - EMOTIONAL MOMENT: "..." (let the visuals convey emotion)
+      - KEY DECISION: Brief internal dialogue (reveal character's choice)
+      - REVELATION: Brief internal dialogue (reveal character's realization)
+
+   6. When to Use Internal Dialogue:
+      - Character making a significant decision
+      - Character experiencing a revelation
+      - Character's private thoughts that can't be shown visually
+      - Character's emotional state that needs verbal expression
+      - Character's interpretation of events that adds depth
+
+   7. When to Use Silence ("..."):
+      - Establishing shots and scene setting
+      - Action sequences and movement
+      - Emotional moments and reactions
+      - Visual storytelling sequences
+      - Transitions between scenes
+      - When visuals alone tell the story effectively
+
+   8. Voice Narration Duration Rules:
+      - Internal dialogue MUST be shorter than clip_duration
+      - Calculate approximate spoken duration based on word count:
+        * Average speaking rate: 2.5 words per second
+        * Add 0.5 seconds buffer for natural pauses
+      - STRICT WORD COUNT LIMITS:
+        * 2-second clip: Maximum 3 words
+        * 3-second clip: Maximum 5 words
+        * 4-second clip: Maximum 7 words
+        * 5-second clip: Maximum 9 words
+        * 6-second clip: Maximum 11 words
+      - If narration exceeds these limits:
+        * ALWAYS shorten the narration to fit
+        * NEVER split into multiple clips
+        * NEVER increase clip_duration
+      - Examples of valid dialogue lengths:
+        * 2s clip: "What is that?"
+        * 3s clip: "Something's wrong here"
+        * 4s clip: "I have to find it now"
+        * 5s clip: "This can't be happening to us"
+        * 6s clip: "I need to stop this before it's too late"
+
+   9. Duration Validation Examples:
+      - ESTABLISHING SHOT (5s): "..." (silence)
+      - QUICK REACTION (2s): "What is that?" (3 words = ~1.2s)
+      - EMOTIONAL MOMENT (3s): "..." (silence)
+      - KEY DECISION (4s): "I have to try" (4 words = ~1.6s)
+      - REVELATION (5s): "This changes everything" (3 words = ~1.2s)
+
+   10. Duration Guidelines by Shot Type:
+       - ESTABLISHING SHOT (4-6s): "..." (silence)
+       - MEDIUM SHOT (3-4s): Brief internal dialogue (3-5 words)
+       - CLOSE UP (2-3s): Very brief internal dialogue (2-3 words)
+       - TRACKING SHOT (3-4s): Brief internal dialogue (3-5 words)
+       - AERIAL SHOT (4-5s): "..." (silence)
 
 Music Score Guidelines:
 1. Score Type Selection:
@@ -836,18 +784,18 @@ Music Score Guidelines:
    - Ensure variety in sound palette
 
 5. Genre-Specific Examples:
-   - Sci-Fi: "Classic synthwave with warm pads and crisp arpeggios"
-   - Western: "Desolate frontier twilight with haunting whistles and eerie slide guitar"
-   - Fantasy: "Soaring orchestral arrangements with ancient Celtic harps"
-   - Noir: "Smoky jazz saxophone with melancholic piano melodies"
-   - Cyberpunk: "Gritty industrial beats with glitching digital artifacts"
-   - Romance: "Light-hearted piano melodies with playful string pizzicato"
-   - Horror: "Dissonant string clusters and unsettling piano motifs"
-   - Space Opera: "Majestic orchestral themes with futuristic electronic elements"
-   - Historical: "Authentic period instruments performing elegant chamber arrangements"
-   - Action: "Driving electronic beats with funk-influenced bass grooves"
-   - Indie: "Lo-fi acoustic guitar with nostalgic analog synth tones"
-   - Superhero: "Bold, heroic brass themes with electronic hybrid orchestration"
+   - Sci-Fi: "Atmospheric wave synths with reverb-drenched pads and cyberpunk arpeggiators"
+   - Western: "Latin-infused guitar interplay with desert atmospherics and minimal percussion"
+   - Fantasy: "Ethereal bell textures with ancient instruments and ambient trap undercurrents"
+   - Noir: "Darkwave synthesizers with brooding post-punk guitars and melancholic piano motifs"
+   - Cyberpunk: "Industrial rhythms with chillwave textures and futuristic techno elements"
+   - Romance: "Emotional lo-fi piano with dreamy guitar samples and gentle wave atmospherics"
+   - Horror: "Distorted wave bass with dissonant string glitches and mechanical percussion"
+   - Space Opera: "Cosmic ambient textures with reverberant lap steel and spatial percussion"
+   - Historical: "Authentic instruments processed through modern wave production techniques"
+   - Action: "Driving trap percussion with hard-hitting 808s and tense synth stabs"
+   - Indie: "Lo-fi guitar textures with emo trap beats and nostalgic analog synths"
+   - Superhero: "Bold brass themes with wave-influenced electronic production and melodic bass"
 
 6. Score Structure:
    - Opening: Establish main themes and mood
@@ -889,145 +837,7 @@ Music Score Guidelines:
     - Poor dynamic range
     - Missing emotional support
     - Inappropriate instrumentation
-
-5. Context-Aware Clip_Action Guidelines:
-
-   1. Universal Context Parser:
-      BEFORE generating clip_action, parse scene data into structured context map:
-      {
-         "lighting": {
-            "source": ["front", "back", "side", "top", "ambient"],
-            "quality": ["hard", "soft", "diffused"],
-            "effects": ["volumetric", "shadows", "silhouette"],
-            "time": ["day", "night", "golden_hour", "blue_hour"]
-         },
-         "environment": {
-            "location": ["INT", "EXT"],
-            "space_type": ["urban", "nature", "industrial", "domestic"],
-            "weather": ["clear", "rain", "snow", "storm", "fog"],
-            "elements": ["dust", "smoke", "water", "foliage"]
-         },
-         "shot": {
-            "type": ["ESTABLISHING", "WIDE", "MEDIUM", "CLOSE"],
-            "angle": ["high", "low", "eye_level", "dutch"],
-            "movement": ["static", "pan", "track", "dolly", "zoom"]
-         },
-         "visibility_zones": {
-            "primary": ["what elements are most visible based on lighting"],
-            "secondary": ["what elements are partially visible"],
-            "tertiary": ["what elements are in shadow/silhouette"]
-         }
-      }
-
-   2. Animation Priority Matrix:
-      Map each scene element to visibility and movement potential:
-
-      HIGH VISIBILITY + HIGH MOVEMENT:
-      - Elements catching direct light
-      - Particles in light beams
-      - Reflective surfaces
-      - Front-lit character features
-
-      HIGH VISIBILITY + LOW MOVEMENT:
-      - Architectural elements
-      - Static environmental features
-      - Hard shadows
-      - Background structures
-
-      LOW VISIBILITY + HIGH MOVEMENT:
-      - Silhouetted forms
-      - Background motion
-      - Atmospheric effects
-      - Secondary lighting effects
-
-      LOW VISIBILITY + LOW MOVEMENT:
-      - Shadow details
-      - Background textures
-      - Subtle atmospheric effects
-      - Distant elements
-
-   3. Context-Aware Animation Rules:
-
-      a) Primary Animation Selection:
-         - MUST be from HIGH VISIBILITY categories
-         - MUST match environment elements
-         - MUST be supported by lighting conditions
-         Example: "dust catching sunlight" only valid with:
-         - Dust in environment elements
-         - Strong directional lighting
-         - Visible light beams
-
-      b) Secondary Animation Selection:
-         - Can be from LOW VISIBILITY categories
-         - Must enhance primary animation
-         - Must match atmospheric conditions
-         Example: "silhouette shifting" only valid with:
-         - Backlighting present
-         - Character in scene
-         - Appropriate shot type
-
-      c) Camera Movement Selection:
-         - Must match shot type
-         - Must support primary animation
-         - Must maintain visibility of key elements
-
-   4. Validation Pipeline:
-      Each clip_action must pass ALL checks:
-
-      a) Element Existence Check:
-         ✓ All animated elements exist in scene description
-         ✓ All elements match environment type
-         ✓ All elements match weather conditions
-
-      b) Visibility Check:
-         ✓ Primary animation uses highly visible elements
-         ✓ Animation matches lighting conditions
-         ✓ Elements are visible in current shot type
-
-      c) Physics Check:
-         ✓ Movements match natural physics
-         ✓ Effects match weather conditions
-         ✓ Scale matches shot type
-
-      d) Technical Check:
-         ✓ Animation is supported by CogVideoX
-         ✓ Camera movement is supported
-         ✓ Duration is appropriate
-
-   5. Common Patterns Library:
-      Reusable patterns for specific contexts:
-
-      BACKLIT SCENES:
-      Primary: silhouette_movement, rim_light_effects
-      Secondary: atmospheric_effects, environmental_motion
-      Camera: static, slow_pan
-
-      FRONT-LIT SCENES:
-      Primary: facial_features, detailed_movements
-      Secondary: environmental_effects, background_motion
-      Camera: tracking, dolly
-
-      ATMOSPHERIC SCENES:
-      Primary: particle_effects, light_rays
-      Secondary: environmental_motion, depth_effects
-      Camera: static, gentle_pan
-
-   6. Error Prevention:
-      NEVER generate clip_action that:
-      - Animates invisible elements
-      - Conflicts with physics
-      - Exceeds technical limitations
-      - Combines incompatible effects
-      - Ignores lighting conditions
-      - Violates shot type constraints
-
-   7. Scale Optimization:
-      - Cache common context maps
-      - Reuse validated animation patterns
-      - Build context-specific templates
-      - Maintain animation compatibility matrix
-      - Update supported effects library
-      - Monitor success/failure patterns
+   
 """
 
 app = Flask(__name__)
@@ -1061,36 +871,36 @@ def generate_story_chunk(client, prompt, chunk_number, total_chunks, previous_ch
     if chunk_number == 1:
         story_progress = """
 This is ACT 1 (SETUP).
-- Establish a compelling character through visual details and environment
-- Create a distinctive visual baseline (color palette, lighting style)
+- Establish a compelling character through professional visual details and environment
+- Create a distinctive visual baseline (professional color palette, cinematic lighting style)
 - Include a clear inciting incident by sequence 3-4
 - End with character making a decision/accepting a challenge
-- VISUAL STYLE: Stable compositions, consistent lighting, defined color palette
-- CAMERA WORK: Start with establishing shots, transition to medium shots
+- VISUAL STYLE: Professional compositions with rule of thirds, cinematic lighting with dramatic shadows, defined color palette with rich contrast
+- CAMERA WORK: Start with professional establishing shots, transition to medium shots with balanced composition
 - PACING: Begin with longer, stable shots (4-6 seconds for b-roll)
-- CHARACTER VISUALS: Introduce character in their normal element
-- SHOT PATTERNS: Use "wide -> wide -> wide" pattern for establishing shots
+- CHARACTER VISUALS: Introduce character in their normal element with professional portrait lighting
+- SHOT PATTERNS: Use "wide -> wide -> wide" pattern for establishing shots with dynamic framing
 - TIMING: Use consistent 2.5s durations for wide shots to establish rhythm
 
 B-ROLL GUIDELINES FOR ACT 1:
-- Use longer establishing shots (4-6 seconds)
-- Focus on environmental scale and grandeur
-- Establish location's distinctive features
-- Create strong sense of place and atmosphere
-- SHOT PATTERN: "wide -> wide -> wide" for establishing location
+- Use longer establishing shots (4-6 seconds) with professional composition
+- Focus on environmental scale and grandeur with cinematic framing
+- Establish location's distinctive features with professional lighting
+- Create strong sense of place and atmosphere with rich visual detail
+- SHOT PATTERN: "wide -> wide -> wide" for establishing location with professional framing
 """
     elif chunk_number == total_chunks:
         story_progress = """
 This is ACT 3 (RESOLUTION).
 - Begin with character finding new determination after lowest point
-- Build to a visually striking climactic confrontation
-- Show clear visual transformation from beginning state
+- Build to a visually striking climactic confrontation with professional cinematography
+- Show clear visual transformation from beginning state with cinematic lighting
 - Include visual callback to opening sequence but with meaningful differences
-- VISUAL STYLE: Return to stability but with transformation, evolved color palette
-- CAMERA WORK: Dynamic shots for climax, then settle into stable framing
+- VISUAL STYLE: Return to stability with professional transformation, evolved color palette with cinematic grading
+- CAMERA WORK: Dynamic shots for climax with professional tracking, then settle into stable framing with rule of thirds
 - PACING: Intense during climax, gradually relaxing for resolution
-- CHARACTER VISUALS: Show visual transformation through posture, expression, and appearance
-- SHOT PATTERNS: Use "wide -> close-up -> wide" pattern for emotional emphasis
+- CHARACTER VISUALS: Show visual transformation through professional lighting and expression changes
+- SHOT PATTERNS: Use "wide -> close-up -> wide" pattern with professional composition
 - TIMING: Use decreasing rhythm (2.9s -> 1.9s -> 1.0s) for urgency in climax
 """
     else:
@@ -1099,21 +909,21 @@ This is ACT 3 (RESOLUTION).
             story_progress = """
 This is early ACT 2 (CONFRONTATION-RISING).
 - Present initial obstacles and complications
-- Build tension through increasingly dynamic visuals
+- Build tension through increasingly dynamic visuals with professional cinematography
 - Include a major revelation or turning point (midpoint)
 - Show character struggling but initially coping
-- VISUAL STYLE: More dynamic compositions, intensifying colors, increased contrast
-- CAMERA WORK: More movement, varied angles, increasing close-ups
+- VISUAL STYLE: Dynamic compositions with professional depth of field, intensifying colors with cinematic grading, increased contrast with dramatic shadows
+- CAMERA WORK: More movement with smooth tracking, varied angles with professional framing, increasing close-ups with shallow depth of field
 - PACING: More motion, increased visual energy
-- CHARACTER VISUALS: Show initial stress through subtle visual changes
-- SHOT PATTERNS: Use "wide -> medium -> wide" pattern for character focus
+- CHARACTER VISUALS: Show initial stress through professional lighting changes and subtle expressions
+- SHOT PATTERNS: Use "wide -> medium -> wide" pattern with professional composition
 - TIMING: Use building rhythm (2.3s -> 2.4s -> 2.5s) to create tension
 
 B-ROLL GUIDELINES FOR EARLY ACT 2:
-- Show environment's challenges and obstacles
-- Use weather and lighting to build tension
-- Create visual metaphors through environment
-- SHOT PATTERN: "wide -> detail -> wide" for revealing threats
+- Show environment's challenges and obstacles with professional framing
+- Use weather and lighting to build tension with cinematic effects
+- Create visual metaphors through environment with professional composition
+- SHOT PATTERN: "wide -> detail -> wide" for revealing threats with professional framing
 """
         else:
             story_progress = """
@@ -1121,78 +931,170 @@ This is late ACT 2 (CONFRONTATION-FALLING).
 - Increase stakes and obstacles to seemingly insurmountable levels
 - Create false victory followed by major setback
 - End with character at their lowest point/dark night of the soul
-- VISUAL STYLE: Most unstable compositions, extreme visual style
-- CAMERA WORK: Unstable framing, extreme angles, disorienting movement
+- VISUAL STYLE: Most unstable compositions with professional cinematography, extreme visual style with cinematic grading
+- CAMERA WORK: Unstable framing with professional tracking, extreme angles with balanced composition, disorienting movement with smooth transitions
 - PACING: Varied rhythms building to crisis
-- CHARACTER VISUALS: Show maximum visual distress and deterioration
-- SHOT PATTERNS: Use "medium -> close-up -> medium" pattern for character focus
+- CHARACTER VISUALS: Show maximum visual distress through professional lighting and expression changes
+- SHOT PATTERNS: Use "medium -> close-up -> medium" pattern with professional composition
 - TIMING: Use contrasting rhythm (7s -> 3s -> 2s) for dramatic emphasis
 
 B-ROLL GUIDELINES FOR LATE ACT 2:
-- Show environment at its most threatening
-- Use extreme weather or conditions
-- Create claustrophobic or overwhelming spaces
-- SHOT PATTERN: "wide -> close -> extreme wide" for emotional impact
+- Show environment at its most threatening with professional framing
+- Use extreme weather or conditions with cinematic effects
+- Create claustrophobic or overwhelming spaces with professional composition
+- SHOT PATTERN: "wide -> close -> extreme wide" for emotional impact with professional framing
 """
     
     # Customize for genre if provided
     genre_guidance = ""
     if genre:
-        if genre.lower() == "noir":
+        genre = genre.lower()
+        if genre == "noir":
             genre_guidance = """
 NOIR VISUAL ELEMENTS:
-- Use high contrast lighting with dramatic shadows
-- Create rain-soaked environments with reflective surfaces
-- Employ dutch/canted angles during moments of psychological stress
-- Use neon lighting for color accents in dark environments
-- Frame character through doorways/windows to suggest entrapment
+- High contrast lighting with professional chiaroscuro
+- Rain-soaked environments with professional reflections
+- Dutch angles with professional composition
+- Neon lighting with professional color grading
+- Framing through doorways with professional depth of field
 - SHOT PATTERNS: Use "wide -> close-up -> wide" for mystery moments
-- TIMING: Use longer durations (4-5s) for contemplative shots
+- TIMING: Longer durations (4-5s) for contemplative shots
+- MUSIC SCORE: Darkwave synthesizers with brooding post-punk guitars and melancholic piano motifs
 """
-        elif genre.lower() == "sci-fi":
+        elif genre == "sci-fi":
             genre_guidance = """
 SCI-FI VISUAL ELEMENTS:
-- Create contrast between advanced technology and human elements
-- Use cool color palettes (blues, teals) with strategic accent colors
-- Employ reflective surfaces and lighting through geometric patterns
-- Frame human elements against vast technological/space backgrounds
-- Use lens flares and volumetric lighting for technological elements
+- Contrast with professional lighting design
+- Cool color palettes with professional grading
+- Reflective surfaces with professional lighting
+- Framing against backgrounds with professional composition
+- Lens flares with professional effects
 - SHOT PATTERNS: Use "wide -> medium -> wide" for technology reveals
-- TIMING: Use consistent 2.5s durations for wide shots of technology
+- TIMING: Consistent 2.5s durations for wide shots of technology
+- MUSIC SCORE: Atmospheric wave synths with reverb-drenched pads and cyberpunk arpeggiators
 """
-        elif genre.lower() == "horror":
+        elif genre == "horror":
             genre_guidance = """
 HORROR VISUAL ELEMENTS:
-- Obscure key elements in shadow or partial lighting
-- Use negative space to create tension and anticipation
-- Employ unsettling compositions with subject in vulnerable positions
-- Create visual intrusions/violations of normal space
-- Use extreme close-ups of tense physical reactions
+- Obscured key elements with professional shadow work
+- Negative space with professional composition
+- Unsettling compositions with professional framing
+- Visual intrusions with professional effects
+- Extreme close-ups with professional lighting
 - SHOT PATTERNS: Use "wide -> close-up -> wide" for jump scares
-- TIMING: Use decreasing rhythm (2.9s -> 1.9s -> 1.0s) for tension
+- TIMING: Decreasing rhythm (2.9s -> 1.9s -> 1.0s) for tension
+- MUSIC SCORE: Distorted wave bass with dissonant string glitches and mechanical percussion
 """
-        elif genre.lower() == "romance":
+        elif genre == "romance":
             genre_guidance = """
 ROMANCE VISUAL ELEMENTS:
-- Use soft, flattering lighting with warm color palettes
-- Create intimate framing with shallow depth of field
-- Employ mirror/reflection shots for self-realization moments
-- Use nature elements to reflect emotional states
-- Create visual bridges between characters (similar colors, compositional elements)
+- Soft, flattering lighting with professional portrait techniques
+- Intimate framing with professional depth of field
+- Mirror shots with professional composition
+- Nature elements with professional framing
+- Visual bridges with professional color grading
 - SHOT PATTERNS: Use "medium -> close-up -> medium" for emotional moments
-- TIMING: Use longer durations (6-7s) for medium shots of characters
+- TIMING: Longer durations (6-7s) for medium shots of characters
+- MUSIC SCORE: Emotional lo-fi piano with dreamy guitar samples and gentle wave atmospherics
 """
-        elif genre.lower() == "action":
+        elif genre == "action":
             genre_guidance = """
 ACTION VISUAL ELEMENTS:
-- Use dynamic camera movements that match action intensity
-- Create strong directional lighting with high contrast
-- Employ low angles to emphasize power and threat
-- Use quick cutting between wide and close shots
-- Include environment interactions (debris, impacts, reactions)
+- Dynamic camera movements with professional tracking
+- Strong directional lighting with professional contrast
+- Low angles with professional composition
+- Quick cutting with professional framing
+- Environment interactions with professional effects
 - SHOT PATTERNS: Use "wide -> wide -> wide" for action sequences
-- TIMING: Use shorter durations (2.0-2.5s) for fast-paced action
+- TIMING: Shorter durations (2.0-2.5s) for fast-paced action
+- MUSIC SCORE: Driving trap percussion with hard-hitting 808s and tense synth stabs
 """
+        elif genre == "indie":
+            genre_guidance = """
+INDIE VISUAL ELEMENTS:
+- Natural lighting with professional composition
+- Handheld camera work with professional stabilization
+- Authentic locations with professional framing
+- Minimalist color grading with professional style
+- Character-focused compositions with professional depth
+- SHOT PATTERNS: Use "medium -> close-up -> medium" for intimate moments
+- TIMING: Varied durations (3-5s) for natural pacing
+- MUSIC SCORE: Lo-fi guitar textures with emo trap beats and nostalgic analog synths
+"""
+        elif genre == "post-apocalyptic":
+            genre_guidance = """
+POST-APOCALYPTIC VISUAL ELEMENTS:
+- Desaturated color palette with professional grading
+- Dust and debris effects with professional composition
+- Abandoned environments with professional lighting
+- Survival-focused framing with professional depth
+- Atmospheric conditions with professional effects
+- SHOT PATTERNS: Use "wide -> medium -> wide" for environment reveals
+- TIMING: Longer durations (4-6s) for establishing shots
+- MUSIC SCORE: Industrial ambient with distorted textures and sparse percussion
+"""
+        elif genre == "western":
+            genre_guidance = """
+WESTERN VISUAL ELEMENTS:
+- Natural lighting with professional contrast
+- Wide landscape shots with professional composition
+- Dust and wind effects with professional framing
+- Period-accurate locations with professional detail
+- Dramatic silhouettes with professional lighting
+- SHOT PATTERNS: Use "wide -> wide -> wide" for landscape reveals
+- TIMING: Longer durations (5-7s) for establishing shots
+- MUSIC SCORE: Latin-infused guitar interplay with desert atmospherics and minimal percussion
+"""
+        elif genre == "cyberpunk":
+            genre_guidance = """
+CYBERPUNK VISUAL ELEMENTS:
+- Neon lighting with professional color grading
+- Rain-slicked streets with professional reflections
+- High-tech elements with professional lighting
+- Urban decay with professional composition
+- Futuristic architecture with professional framing
+- SHOT PATTERNS: Use "wide -> medium -> wide" for technology reveals
+- TIMING: Varied durations (2.5-4s) for dynamic scenes
+- MUSIC SCORE: Industrial rhythms with chillwave textures and futuristic techno elements
+"""
+        elif genre == "fantasy":
+            genre_guidance = """
+FANTASY VISUAL ELEMENTS:
+- Magical lighting with professional effects
+- Mythical locations with professional composition
+- Creature effects with professional integration
+- Period-accurate elements with professional detail
+- Enchanted atmosphere with professional grading
+- SHOT PATTERNS: Use "wide -> medium -> wide" for magical reveals
+- TIMING: Longer durations (4-6s) for establishing shots
+- MUSIC SCORE: Ethereal bell textures with ancient instruments and ambient trap undercurrents
+"""
+        elif genre == "superhero":
+            genre_guidance = """
+SUPERHERO VISUAL ELEMENTS:
+- Dynamic lighting with professional effects
+- Heroic framing with professional composition
+- Action sequences with professional choreography
+- Power effects with professional integration
+- Dramatic angles with professional camera work
+- SHOT PATTERNS: Use "wide -> medium -> wide" for action sequences
+- TIMING: Varied durations (2-4s) for dynamic scenes
+- MUSIC SCORE: Bold brass themes with wave-influenced electronic production and melodic bass
+"""
+        elif genre == "blockbuster":
+            genre_guidance = """
+BLOCKBUSTER VISUAL ELEMENTS:
+- Epic scale with professional composition
+- High production value with professional effects
+- Dynamic camera work with professional tracking
+- Spectacular set pieces with professional choreography
+- Dramatic lighting with professional contrast
+- SHOT PATTERNS: Use "wide -> wide -> wide" for epic moments
+- TIMING: Varied durations (3-6s) for dramatic impact
+- MUSIC SCORE: Orchestral themes with modern electronic elements and powerful percussion
+"""
+        else:
+            logger.warning(f"Unsupported genre: {genre}. Using default cinematic style.")
     
     chunk_prompt = f"""Create a compelling story about: {prompt}
 
@@ -1268,7 +1170,7 @@ VISUAL STORYTELLING REQUIREMENTS:
     )
     
     return parse_json_response(message.content[0].text)
-
+CORS(app)
 @app.route('/generate-cinematic-story', methods=['POST'])
 def generate_cinematic_story():
     try:
